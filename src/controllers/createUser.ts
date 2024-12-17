@@ -50,3 +50,5 @@ export const registerUser = async (req: FastifyRequest, reply: FastifyReply) => 
     return reply.code(500).send({ error: 'Erro interno do servidor' });
   }
 };
+
+
