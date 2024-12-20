@@ -7,48 +7,39 @@ import { z } from 'zod';
 // Esquema de validação para login
 const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(6),  // tu parou na hora de testar a aplicação com token
 });
 
 // Controller para login
-export const loginUser = async (req: FastifyRequest, reply: FastifyReply) => {
-  try {
-    // Validação do corpo da requisição
-    const { email, password } = loginSchema.parse(req.body);
+export async function loginUser(request: FastifyRequest, reply: FastifyReply) {
+  const loginBodySchema = z.object({
+    email: z.string().email(),
+    password: z.string(),
+  });
 
-    // Verificar se o usuário existe no banco
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
+  const { email, password } = loginBodySchema.parse(request.body);
 
-    if (!user) {
-      return reply.code(401).send({ error: 'E-mail ou senha incorretos' });
-    }
+  // Verificar se o usuário existe
+  const user = await prisma.user.findUnique({
+    where: { email },
+  });
 
-    // Comparar a senha fornecida com a senha criptografada
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      return reply.code(401).send({ error: 'E-mail ou senha incorretos' });
-    }
-
-    // Gerar o token JWT
-    const token = jwt.sign(
-      { id: user.id, email: user.email },
-      process.env.JWT_SECRET || 'default_secret',
-      { expiresIn: '1h' } // Token válido por 1 hora
-    );
-
-    // Retornar o token ao cliente
-    return reply.code(200).send({
-      message: 'Login realizado com sucesso',
-      token,
-    });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return reply.code(400).send({ error: 'Dados inválidos', issues: error.errors });
-    }
-
-    console.error(error);
-    return reply.code(500).send({ error: 'Erro interno do servidor' });
+  if (!user) {
+    return reply.status(404).send({ message: "Usuário não encontrado" });
   }
-};
+
+  // Verificar a senha
+  const isPasswordValid = await bcrypt.compare(password, user.password);
+
+  if (!isPasswordValid) {
+    return reply.status(401).send({ message: "Credenciais inválidas" });
+  }
+
+  // Gerar o token JWT
+  const token = request.server.jwt.sign(
+    { id: user.id, email: user.email },
+    { expiresIn: "1h" } // O token expira em 1 hora
+  );
+
+  return reply.status(200).send({ token });
+}
